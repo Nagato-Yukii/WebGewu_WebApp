@@ -1,0 +1,292 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" href="../images/favicon.ico" type="image/x-icon">
+  <link rel="stylesheet" href="../css/main.css">
+  <link rel="stylesheet" href="css/style.css">
+  <title>WebRL Receiver</title>
+  <style>
+    body {
+      background: radial-gradient(circle at top, #e8eef7 0%, #d7e1ee 28%, #b9c8da 58%, #8ea0b6 100%);
+    }
+
+    #player {
+      position: relative;
+      min-height: 480px;
+      overflow: hidden;
+      background: #05070b;
+    }
+
+    .overlay-panel {
+      position: absolute;
+      z-index: 9999;
+      box-sizing: border-box;
+    }
+
+    #cover-panel {
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      gap: 24px;
+      background: rgba(0, 0, 0, 0.68);
+    }
+
+    .cover-button {
+      min-width: 240px;
+      padding: 20px 28px;
+      border: 1px solid rgba(193, 214, 238, 0.28);
+      border-radius: 12px;
+      background: linear-gradient(180deg, rgba(61, 81, 107, 0.96) 0%, rgba(26, 34, 44, 0.96) 100%);
+      box-shadow: 0 16px 32px rgba(0, 0, 0, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+      color: #eef5ff;
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      cursor: pointer;
+    }
+
+    .cover-button:hover {
+      background: linear-gradient(180deg, rgba(82, 106, 138, 0.98) 0%, rgba(35, 45, 57, 0.98) 100%);
+    }
+
+    #webrl-panel {
+      top: 6px;
+      left: 6px;
+      display: none;
+    }
+
+    #robohetu-panel {
+      top: 20px;
+      right: 20px;
+      display: none;
+      width: 320px;
+      padding: 16px 18px;
+      border-radius: 10px;
+      border: 1px solid rgba(17, 19, 23, 0.96);
+      background: linear-gradient(180deg, rgba(79, 98, 125, 0.82) 0%, rgba(38, 42, 46, 0.8) 100%);
+      box-shadow: 0 16px 36px rgba(0, 0, 0, 0.32), inset 0 1px 0 rgba(196, 213, 232, 0.16);
+      color: #dbe5f1;
+      font-family: Arial, Helvetica, sans-serif;
+    }
+
+    #robohetu-panel .panel-title {
+      margin-bottom: 10px;
+      font-size: 14px;
+      font-weight: 700;
+      color: #eef4fb;
+    }
+
+    #robohetu-panel .hint-line {
+      margin: 7px 0;
+      font-size: 13px;
+      line-height: 1.45;
+      color: rgba(235, 242, 250, 0.95);
+    }
+
+    #webtinker-panel {
+      top: 20px;
+      right: 20px;
+      display: none;
+      width: 240px;
+      padding: 14px 16px;
+      border-radius: 10px;
+      border: 1px solid rgba(17, 19, 23, 0.96);
+      background: linear-gradient(180deg, rgba(79, 98, 125, 0.82) 0%, rgba(38, 42, 46, 0.8) 100%);
+      box-shadow: 0 16px 36px rgba(0, 0, 0, 0.32), inset 0 1px 0 rgba(196, 213, 232, 0.16);
+      color: #dbe5f1;
+      font-family: Arial, Helvetica, sans-serif;
+    }
+
+    #webtinker-panel .panel-title {
+      margin-bottom: 10px;
+      font-size: 14px;
+      font-weight: 700;
+      color: #eef4fb;
+    }
+
+    #webtinker-panel .value-row {
+      margin-top: 8px;
+      font-size: 13px;
+      line-height: 1.5;
+      color: rgba(235, 242, 250, 0.95);
+    }
+
+    #modelControlPanel {
+      width: 360px;
+      padding: 8px 7px 9px;
+      border-radius: 4px;
+      background: linear-gradient(180deg, rgba(79, 98, 125, 0.68) 0%, rgba(58, 73, 93, 0.64) 54%, rgba(38, 42, 46, 0.6) 100%);
+      border: 1px solid rgba(13, 17, 24, 0.92);
+      box-shadow: inset 0 1px 0 rgba(196, 213, 232, 0.16);
+      color: #dbe5f1;
+      font-family: Arial, Helvetica, sans-serif;
+    }
+
+    #modelControlPanel .panel-title {
+      margin-bottom: 5px;
+      font-size: 10px;
+      font-weight: 700;
+      color: #d5dfec;
+    }
+
+    #modelControlPanel .current-robot {
+      margin-bottom: 5px;
+      font-size: 10px;
+      color: #eef4fb;
+    }
+
+    #modelControlPanel .section-label {
+      margin: 6px 0 4px;
+      font-size: 10px;
+      font-weight: 400;
+      color: #dbe5f1;
+    }
+
+    #robotButtonRow {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 3px;
+      margin-bottom: 4px;
+    }
+
+    #policyButtonRow {
+      display: grid;
+      gap: 3px;
+    }
+
+    #modelControlPanel .control-button {
+      min-width: 104px;
+      height: 20px;
+      padding: 0 8px;
+      border-radius: 4px;
+      border: 1px solid rgba(17, 19, 23, 0.96);
+      background: linear-gradient(180deg, #425164 0%, #2f3945 46%, #252c34 47%, #394450 100%);
+      box-shadow: inset 0 1px 0 rgba(197, 216, 235, 0.14), inset 0 -1px 0 rgba(0, 0, 0, 0.35);
+      color: #d8dee8;
+      cursor: pointer;
+      font-size: 10px;
+      line-height: 18px;
+      text-align: center;
+      white-space: nowrap;
+    }
+
+    #modelControlPanel .control-button:hover {
+      background: linear-gradient(180deg, #4b5d73 0%, #36414f 46%, #2a3138 47%, #44505d 100%);
+    }
+
+    #modelControlPanel .control-button.active {
+      background: linear-gradient(180deg, #8ea8c8 0%, #6f89ab 46%, #5a7498 47%, #8ba7c9 100%);
+      color: #0f1720;
+      box-shadow: inset 0 1px 0 rgba(240, 247, 255, 0.35), inset 0 -1px 0 rgba(39, 55, 72, 0.45);
+    }
+
+    #policyButtonRow .control-button {
+      width: 100%;
+      height: 20px;
+    }
+
+    .panel-back-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 108px;
+      height: 22px;
+      margin-top: 10px;
+      padding: 0 10px;
+      border-radius: 4px;
+      border: 1px solid rgba(17, 19, 23, 0.96);
+      background: linear-gradient(180deg, #425164 0%, #2f3945 46%, #252c34 47%, #394450 100%);
+      color: #d8dee8;
+      cursor: pointer;
+      font-size: 10px;
+      line-height: 20px;
+    }
+
+    .panel-back-button:hover {
+      background: linear-gradient(180deg, #4b5d73 0%, #36414f 46%, #2a3138 47%, #44505d 100%);
+    }
+
+    #selectionStatus {
+      margin-top: 4px;
+      min-height: 12px;
+      font-size: 10px;
+      color: rgba(219, 229, 241, 0.92);
+    }
+  </style>
+</head>
+<body>
+  <div id="container">
+    <h1>WebRL Receiver</h1>
+
+    <div id="warning" hidden="true"></div>
+
+    <div id="player">
+      <div id="cover-panel" class="overlay-panel">
+        <button id="startWebrlButton" class="cover-button">Start WebRL Lab</button>
+        <button id="startRoboHetuButton" class="cover-button">Start RoboHeTu</button>
+        <button id="startWebTinkerButton" class="cover-button">Start WebTinkerRL</button>
+      </div>
+
+      <div id="webrl-panel" class="overlay-panel">
+        <div id="modelControlPanel">
+          <div class="panel-title">WebRL Local Debugger</div>
+          <div id="currentRobotLabel" class="current-robot">Robot: X02Lite</div>
+
+          <div id="robotButtonRow">
+            <button class="control-button robot-button" data-target="X02Lite">X02Lite</button>
+            <button class="control-button robot-button" data-target="Go2">Go2</button>
+            <button class="control-button robot-button" data-target="Go2W">Go2W</button>
+            <button class="control-button robot-button" data-target="OpenLoong">OpenLoong</button>
+            <button class="control-button robot-button" data-target="Tron1">Tron1</button>
+          </div>
+
+          <div class="section-label">Policy</div>
+          <div id="policyButtonRow"></div>
+
+          <div id="selectionStatus"></div>
+          <button id="backToDirectoryFromWebrl" class="panel-back-button">Back To Directory</button>
+        </div>
+      </div>
+
+      <div id="robohetu-panel" class="overlay-panel">
+        <div class="panel-title">RoboHeTu Control Hint</div>
+        <div class="hint-line">全向行走: WASD</div>
+        <div class="hint-line">旋转: Q / E</div>
+        <div class="hint-line">模式切换: 1 平地, 2 跑步, 3 楼梯</div>
+        <button id="backToDirectoryFromRobohetu" class="panel-back-button">Back To Directory</button>
+      </div>
+
+      <div id="webtinker-panel" class="overlay-panel">
+        <div class="panel-title">WebTinkerRL Local Training</div>
+        <div class="value-row">LiftAssistCurriculum: <span id="tinkerLiftAssistCurriculumValue">1.00</span></div>
+        <div class="value-row">Reward: <span id="tinkerCumulativeRewardValue">0.00</span></div>
+        <button id="tinkerTrainingToggleButton" class="panel-back-button">Restart Local Trainer Bootstrap</button>
+        <button id="backToDirectoryFromWebtinker" class="panel-back-button">Back To Directory</button>
+      </div>
+    </div>
+
+    <div class="box">
+      <span>Codec preferences:</span>
+      <select id="codecPreferences" autocomplete="off" disabled>
+        <option selected value="">Default</option>
+      </select>
+    </div>
+
+    <div class="box">
+      <span>Lock Cursor to Player:</span>
+      <input type="checkbox" id="lockMouseCheck" autocomplete="off">
+    </div>
+
+    <p>当前页面用于接收 Unity Render Streaming 视频流，并向 Unity 回传浏览器输入、场景切换与本地训练控制命令。</p>
+
+    <div id="message"></div>
+  </div>
+
+  <script type="text/javascript" src="https://webrtc.github.io/adapter/adapter-latest.js"></script>
+  <script src="https://unpkg.com/event-target@latest/min.js"></script>
+  <script src="https://unpkg.com/resize-observer-polyfill@1.5.0/dist/ResizeObserver.global.js"></script>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
