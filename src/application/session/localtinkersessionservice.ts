@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import { spawn } from 'child_process';
 import * as net from 'net';
+import * as os from 'os';
 import * as path from 'path';
 
 export interface LocalTinkerSessionStartResult {
@@ -21,13 +22,15 @@ export interface LocalTinkerSessionStartResult {
 }
 
 export class LocalTinkerSessionService {
+  private readonly isWindows: boolean;
   private readonly repoRoot: string;
-  private readonly powershellExecutable: string;
+  private readonly shellExecutable: string;
   private readonly scriptPath: string;
   private readonly runId: string;
   private readonly logFile: string;
   private readonly routeLogFile: string;
   private readonly trainerWorkingDirectory: string;
+  private readonly configPath: string;
   private readonly playDelaySeconds: number;
   private readonly trainerPort: number;
   private readonly readinessTimeoutMs: number;
@@ -36,19 +39,33 @@ export class LocalTinkerSessionService {
   private readinessPollTimer: NodeJS.Timeout | null = null;
 
   constructor() {
+    this.isWindows = os.platform() === 'win32';
     this.repoRoot = process.env.TINKER_REPO_ROOT || this.resolveRepoRoot();
-    this.powershellExecutable = process.env.TINKER_POWERSHELL_PATH || path.join(
-      process.env.SystemRoot || 'C:\\Windows',
-      'System32',
-      'WindowsPowerShell',
-      'v1.0',
-      'powershell.exe',
-    );
-    this.scriptPath = process.env.TINKER_LOCAL_SESSION_SCRIPT || path.join(this.repoRoot, 'start-webtinker-local-editor.ps1');
+
+    if (this.isWindows) {
+      this.shellExecutable = process.env.TINKER_POWERSHELL_PATH || path.join(
+        process.env.SystemRoot || 'C:\\Windows',
+        'System32',
+        'WindowsPowerShell',
+        'v1.0',
+        'powershell.exe',
+      );
+      this.scriptPath = process.env.TINKER_LOCAL_SESSION_SCRIPT || path.join(this.repoRoot, 'start-webtinker-local-editor.ps1');
+      this.trainerWorkingDirectory = path.join(this.repoRoot, 'gewu', 'Assets', 'WebRL_workspace');
+      this.logFile = path.join(this.repoRoot, 'gewu', 'Temp', 'webtinker-local-bootstrap.log');
+      this.routeLogFile = path.join(this.repoRoot, 'gewu', 'Temp', 'webtinker-local-route.log');
+    } else {
+      const condaEnvPath = process.env.TINKER_CONDA_ENV_PATH || '/home/suzumiyaharuhi/anaconda3/envs/gewu';
+      this.shellExecutable = process.env.TINKER_PYTHON_PATH || path.join(condaEnvPath, 'bin', 'python');
+      this.scriptPath = '';
+      const unityProjectRoot = process.env.TINKER_UNITY_PROJECT_ROOT || '/home/suzumiyaharuhi/WebGewu';
+      this.trainerWorkingDirectory = path.join(unityProjectRoot, 'Assets', 'WebRL_workspace');
+      this.logFile = path.join(unityProjectRoot, 'Temp', 'webtinker-local-bootstrap.log');
+      this.routeLogFile = path.join(unityProjectRoot, 'Temp', 'webtinker-local-route.log');
+    }
+
+    this.configPath = path.join(this.trainerWorkingDirectory, 'config.yaml');
     this.runId = process.env.TINKER_LOCAL_RUN_ID || 'webtinkerrl';
-    this.logFile = path.join(this.repoRoot, 'gewu', 'Temp', 'webtinker-local-bootstrap.log');
-    this.routeLogFile = path.join(this.repoRoot, 'gewu', 'Temp', 'webtinker-local-route.log');
-    this.trainerWorkingDirectory = path.join(this.repoRoot, 'gewu', 'Assets', 'WebRL_workspace');
     this.playDelaySeconds = 10;
     this.trainerPort = Number(process.env.TINKER_TRAINER_PORT || 5004);
     this.readinessTimeoutMs = Number(process.env.TINKER_TRAINER_READY_TIMEOUT_MS || 60000);
@@ -68,13 +85,13 @@ export class LocalTinkerSessionService {
       return this.activeBootstrap;
     }
 
-    this.appendRouteLog(`Launching bootstrap. powershell=${this.powershellExecutable} script=${this.scriptPath}`);
+    this.appendRouteLog(`Launching bootstrap. platform=${os.platform()} executable=${this.shellExecutable}`);
 
     const now = Date.now();
     const result: LocalTinkerSessionStartResult = {
       started: true,
       pid: null,
-      scriptPath: this.scriptPath,
+      scriptPath: this.isWindows ? this.scriptPath : this.shellExecutable,
       runId: this.runId,
       logFile: this.logFile,
       trainerWorkingDirectory: this.trainerWorkingDirectory,
@@ -91,25 +108,38 @@ export class LocalTinkerSessionService {
     this.activeBootstrap = result;
     this.activeBootstrapExpiresAt = now + this.readinessTimeoutMs;
 
-    const child = spawn(this.powershellExecutable, [
-      '-NoProfile',
-      '-ExecutionPolicy',
-      'Bypass',
-      '-File',
-      this.scriptPath,
-      '-RunId',
-      this.runId,
-      '-PlayDelaySeconds',
-      String(this.playDelaySeconds),
-      '-LogFile',
-      this.logFile,
-    ], {
-      cwd: this.repoRoot,
-      detached: false,
-      windowsHide: true,
-      stdio: ['ignore', 'pipe', 'pipe'],
-      env: process.env,
-    });
+    const child = this.isWindows
+      ? spawn(this.shellExecutable, [
+          '-NoProfile',
+          '-ExecutionPolicy',
+          'Bypass',
+          '-File',
+          this.scriptPath,
+          '-RunId',
+          this.runId,
+          '-PlayDelaySeconds',
+          String(this.playDelaySeconds),
+          '-LogFile',
+          this.logFile,
+        ], {
+          cwd: this.repoRoot,
+          detached: false,
+          windowsHide: true,
+          stdio: ['ignore', 'pipe', 'pipe'],
+          env: process.env,
+        })
+      : spawn(this.shellExecutable, [
+          '-m',
+          'mlagents.trainers.learn',
+          this.configPath,
+          `--run-id=${this.runId}`,
+          '--force',
+        ], {
+          cwd: this.trainerWorkingDirectory,
+          detached: false,
+          stdio: ['ignore', 'pipe', 'pipe'],
+          env: { ...process.env, PYTHONNOUSERSITE: '1' },
+        });
 
     child.once('spawn', () => {
       if (this.activeBootstrap !== null) {
@@ -166,12 +196,25 @@ export class LocalTinkerSessionService {
   }
 
   private ensurePaths() {
-    if (!fs.existsSync(this.scriptPath)) {
-      throw new Error(`Local bootstrap script was not found: ${this.scriptPath}`);
-    }
+    if (this.isWindows) {
+      if (!fs.existsSync(this.scriptPath)) {
+        throw new Error(`Local bootstrap script was not found: ${this.scriptPath}`);
+      }
 
-    if (!fs.existsSync(this.powershellExecutable)) {
-      throw new Error(`Powershell executable was not found: ${this.powershellExecutable}`);
+      if (!fs.existsSync(this.shellExecutable)) {
+        throw new Error(`Powershell executable was not found: ${this.shellExecutable}`);
+      }
+    } else {
+      if (!fs.existsSync(this.shellExecutable)) {
+        throw new Error(
+          `Python executable was not found: ${this.shellExecutable}. ` +
+          `Please verify the conda env 'gewu' is installed at the expected path.`,
+        );
+      }
+
+      if (!fs.existsSync(this.configPath)) {
+        throw new Error(`Trainer config was not found: ${this.configPath}`);
+      }
     }
 
     if (!fs.existsSync(this.trainerWorkingDirectory)) {
@@ -286,9 +329,13 @@ export class LocalTinkerSessionService {
   }
 
   private looksLikeRepoRoot(candidate: string): boolean {
-    return fs.existsSync(path.join(candidate, 'start-webtinker-local-editor.ps1')) &&
-      fs.existsSync(path.join(candidate, 'WebApp')) &&
-      fs.existsSync(path.join(candidate, 'gewu'));
+    if (this.isWindows) {
+      return fs.existsSync(path.join(candidate, 'start-webtinker-local-editor.ps1')) &&
+        fs.existsSync(path.join(candidate, 'WebApp')) &&
+        fs.existsSync(path.join(candidate, 'gewu'));
+    }
+
+    return fs.existsSync(path.join(candidate, 'Assets', 'WebRL_workspace', 'config.yaml'));
   }
 
   private appendRouteLog(message: string) {
