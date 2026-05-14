@@ -59,12 +59,14 @@ export class LocalTinkerSessionService {
       this.shellExecutable = process.env.TINKER_PYTHON_PATH || path.join(condaEnvPath, 'bin', 'python');
       this.scriptPath = '';
       const unityProjectRoot = process.env.TINKER_UNITY_PROJECT_ROOT || '/home/suzumiyaharuhi/WebGewu';
-      this.trainerWorkingDirectory = path.join(unityProjectRoot, 'Assets', 'WebRL_workspace');
+      this.trainerWorkingDirectory = unityProjectRoot;
       this.logFile = path.join(unityProjectRoot, 'Temp', 'webtinker-local-bootstrap.log');
       this.routeLogFile = path.join(unityProjectRoot, 'Temp', 'webtinker-local-route.log');
     }
 
-    this.configPath = path.join(this.trainerWorkingDirectory, 'config.yaml');
+    this.configPath = this.isWindows
+      ? path.join(this.trainerWorkingDirectory, 'config.yaml')
+      : path.join(this.trainerWorkingDirectory, 'Assets', 'WebRL_workspace', 'config.yaml');
     this.runId = process.env.TINKER_LOCAL_RUN_ID || 'webtinkerrl';
     this.playDelaySeconds = 10;
     this.trainerPort = Number(process.env.TINKER_TRAINER_PORT || 5004);
